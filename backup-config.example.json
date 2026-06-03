@@ -1,0 +1,18 @@
+{
+  "origen": "C:\\Users\\YourUser\\Projects",
+  "destino": "C:\\Users\\YourUser\\OneDrive\\Projects-backup",
+  "crearRegistro": true,
+  "archivoLog": "C:\\Users\\YourUser\\Desktop\\CopyKeeper_log.txt",
+  "carpetasAIgnorar": [
+    "node_modules",
+    ".git",
+    "dist",
+    "bin",
+    "obj"
+  ],
+  "archivosAIgnorar": [
+    "package-lock.json",
+    "pnpm-lock.yaml"
+  ],
+  "extras": []
+}

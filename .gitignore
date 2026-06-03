@@ -1,0 +1,14 @@
+# Local config with personal paths / project names (do NOT commit)
+backup-config.json
+
+# Legacy launcher with hardcoded personal paths
+copy.bat
+
+# Log files
+*_log.txt
+CopiarCarpetas_log.txt
+
+# Windows / editor noise
+Thumbs.db
+desktop.ini
+.vscode/
