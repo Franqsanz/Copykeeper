@@ -180,4 +180,4 @@ CopyKeeper/
 
 ## Licencia
 
-MIT — usalo y adaptalo libremente.
+MIT
