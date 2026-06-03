@@ -1,5 +1,7 @@
 # CopyKeeper
 
+*Language: **English** · [Español](./README.es.md)*
+
 A configurable **Windows CLI for incremental folder backups**, with an arrow-key menu to pick what gets copied or ignored.
 
 CopyKeeper mirrors a source folder into a destination (e.g. a local drive or your OneDrive folder), skipping files that haven't changed. You manage everything — source, destination, ignore lists, and extra paths — from a simple interactive menu. No need to edit code.
