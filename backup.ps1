@@ -3,7 +3,14 @@
 #  Navegacion con flechas (UP/DOWN) + ENTER.  ESC = volver/salir.
 #  La config vive en: backup-config.json
 #  El motor de copia es: copyFolders.ps1
+#
+#  Uso normal:  abre el menu interactivo.
+#  Uso con -Run: ejecuta la copia sin menu (lo usa la tarea programada).
 # ============================================================
+
+param(
+    [switch]$Run   # ejecuta la copia en modo silencioso (sin menu) y sale
+)
 
 $ErrorActionPreference = 'Stop'
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
@@ -358,30 +365,17 @@ function Elegir-Contenido {
     }
 }
 
-# ---- Ejecutar la copia usando el motor copyFolders.ps1 ----
-function Ejecutar-Copia {
+# ---- Nucleo de la copia (sin prompts). Devuelve $true si fue OK. ----
+function Invoke-Copia {
     param($cfg)
 
     if (-not (Test-Path -LiteralPath $Script:MotorPath)) {
-        Show-Menu -Titulo "EJECUTAR COPIA" -Opciones @("Volver") `
-            -Info @("ERROR: no se encontro el motor de copia:", "  $Script:MotorPath") | Out-Null
-        return
+        Write-Host ("ERROR: no se encontro el motor de copia: {0}" -f $Script:MotorPath) -ForegroundColor Red
+        return $false
     }
     if (-not (Test-Path -LiteralPath $cfg.origen -PathType Container)) {
-        Show-Menu -Titulo "EJECUTAR COPIA" -Opciones @("Volver") `
-            -Info @(("ERROR: la carpeta de origen no existe:"), ("  " + $cfg.origen)) | Out-Null
-        return
-    }
-
-    $info = @(
-        (" Origen : {0}" -f $cfg.origen),
-        (" Destino: {0}" -f $cfg.destino),
-        (" Ignorando {0} carpeta(s) y {1} archivo(s)." -f `
-            @($cfg.carpetasAIgnorar).Count, @($cfg.archivosAIgnorar).Count),
-        (" Extras a incluir: {0}" -f @($cfg.extras).Count)
-    )
-    if (-not (Confirmar -Pregunta "Confirmar e iniciar la copia?" -Info $info)) {
-        return
+        Write-Host ("ERROR: la carpeta de origen no existe: {0}" -f $cfg.origen) -ForegroundColor Red
+        return $false
     }
 
     $ignorarCarpetas = [string[]]@($cfg.carpetasAIgnorar)
@@ -398,7 +392,6 @@ function Ejecutar-Copia {
         $params.ArchivoRegistro = $cfg.archivoLog
     }
 
-    Clear-Host
     Write-Host "----- INICIANDO COPIA (origen principal) -----" -ForegroundColor Cyan
     try {
         & $Script:MotorPath @params
@@ -444,10 +437,42 @@ function Ejecutar-Copia {
         if ($cfg.crearRegistro) {
             Write-Host ("Registro: {0}" -f $cfg.archivoLog) -ForegroundColor DarkGray
         }
+        return $true
     } catch {
         Write-Host ""
         Write-Host ("ERROR durante la copia: {0}" -f $_.Exception.Message) -ForegroundColor Red
+        return $false
     }
+}
+
+# ---- Ejecutar la copia desde el menu (con validacion y confirmacion) ----
+function Ejecutar-Copia {
+    param($cfg)
+
+    if (-not (Test-Path -LiteralPath $Script:MotorPath)) {
+        Show-Menu -Titulo "EJECUTAR COPIA" -Opciones @("Volver") `
+            -Info @("ERROR: no se encontro el motor de copia:", "  $Script:MotorPath") | Out-Null
+        return
+    }
+    if (-not (Test-Path -LiteralPath $cfg.origen -PathType Container)) {
+        Show-Menu -Titulo "EJECUTAR COPIA" -Opciones @("Volver") `
+            -Info @(("ERROR: la carpeta de origen no existe:"), ("  " + $cfg.origen)) | Out-Null
+        return
+    }
+
+    $info = @(
+        (" Origen : {0}" -f $cfg.origen),
+        (" Destino: {0}" -f $cfg.destino),
+        (" Ignorando {0} carpeta(s) y {1} archivo(s)." -f `
+            @($cfg.carpetasAIgnorar).Count, @($cfg.archivosAIgnorar).Count),
+        (" Extras a incluir: {0}" -f @($cfg.extras).Count)
+    )
+    if (-not (Confirmar -Pregunta "Confirmar e iniciar la copia?" -Info $info)) {
+        return
+    }
+
+    Clear-Host
+    [void](Invoke-Copia $cfg)
     Pausar
 }
 
@@ -492,8 +517,162 @@ function Cambiar-Ruta {
     return $nuevo
 }
 
+# ============================================================
+#  COPIA AUTOMATICA (Programador de tareas de Windows)
+# ============================================================
+$Script:TareaNombre = 'CopyKeeper Backup'
+
+function Get-TareaCopy {
+    try { return Get-ScheduledTask -TaskName $Script:TareaNombre -ErrorAction Stop }
+    catch { return $null }
+}
+
+function Convertir-Dias {
+    param([int]$mascara)
+    $mapa = @{ 1='Domingo'; 2='Lunes'; 4='Martes'; 8='Miercoles';
+               16='Jueves'; 32='Viernes'; 64='Sabado' }
+    $dias = @()
+    foreach ($bit in ($mapa.Keys | Sort-Object)) {
+        if ($mascara -band $bit) { $dias += $mapa[$bit] }
+    }
+    if ($dias.Count -eq 0) { return "$mascara" }
+    return ($dias -join ', ')
+}
+
+function Describir-Tarea {
+    param($tarea)
+    if (-not $tarea) { return "Estado: NO hay copia automatica programada." }
+    try {
+        $trg  = @($tarea.Triggers)[0]
+        $clase = $trg.CimClass.CimClassName
+        $tipo = if ($clase -like '*Daily*')      { "Diaria" }
+                elseif ($clase -like '*Weekly*') { "Semanal" }
+                else                              { "Programada" }
+        $hora = ''
+        if ($trg.StartBoundary) { $hora = ([datetime]$trg.StartBoundary).ToString('HH:mm') }
+        $extra = ''
+        if ($tipo -eq 'Semanal' -and $trg.DaysOfWeek) {
+            $extra = (" - {0}" -f (Convertir-Dias $trg.DaysOfWeek))
+        }
+        return ("Estado: PROGRAMADA ({0} a las {1}){2}" -f $tipo, $hora, $extra)
+    } catch {
+        return "Estado: PROGRAMADA (no se pudo leer el detalle)."
+    }
+}
+
+function Pedir-Hora {
+    Clear-Host
+    Write-Host "==== Horario de la copia ====" -ForegroundColor Cyan
+    Write-Host "(formato 24hs HH:mm, ej 22:00 - vacio = cancelar)" -ForegroundColor DarkGray
+    $txt = (Read-Host "Hora").Trim()
+    if ([string]::IsNullOrWhiteSpace($txt)) { return $null }
+    $dt = [datetime]::MinValue
+    if ([datetime]::TryParseExact($txt, 'HH:mm', $null, [System.Globalization.DateTimeStyles]::None, [ref]$dt)) {
+        return $dt
+    }
+    Write-Host "Hora invalida. Usa el formato HH:mm (ej 09:30 o 22:00)." -ForegroundColor Red
+    Pausar
+    return $null
+}
+
+function Pedir-Dia {
+    $dias = @('Lunes','Martes','Miercoles','Jueves','Viernes','Sabado','Domingo')
+    $mapa = @{ 'Lunes'='Monday'; 'Martes'='Tuesday'; 'Miercoles'='Wednesday';
+               'Jueves'='Thursday'; 'Viernes'='Friday'; 'Sabado'='Saturday'; 'Domingo'='Sunday' }
+    $i = Show-Menu -Titulo "DIA DE LA SEMANA" -Info @("Elegi el dia para la copia semanal:") `
+        -Opciones (@($dias) + "<< Cancelar")
+    if ($i -ge 0 -and $i -lt $dias.Count) { return $mapa[$dias[$i]] }
+    return $null
+}
+
+function Crear-Tarea {
+    param([string]$frecuencia, [datetime]$hora, [string]$dia)
+
+    $scriptPath = $PSCommandPath
+    $arg = ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}" -Run' -f $scriptPath)
+    $accion = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg
+
+    if ($frecuencia -eq 'Weekly') {
+        $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $dia -At $hora
+    } else {
+        $trigger = New-ScheduledTaskTrigger -Daily -At $hora
+    }
+
+    $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+    Register-ScheduledTask -TaskName $Script:TareaNombre -Action $accion -Trigger $trigger `
+        -Settings $settings -Description 'CopyKeeper: copia de respaldo automatica' -Force | Out-Null
+}
+
+function Programar-Copia {
+    do {
+        $tarea = Get-TareaCopy
+        $info = @(
+            (Describir-Tarea $tarea),
+            "",
+            ("Se ejecutara este script en modo silencioso:"),
+            ("  {0}" -f $PSCommandPath)
+        )
+        $op = Show-Menu -Titulo "COPIA AUTOMATICA" -Info $info -Opciones @(
+            "Programar copia DIARIA",
+            "Programar copia SEMANAL",
+            "Quitar la copia automatica",
+            "Volver"
+        )
+        switch ($op) {
+            0 {
+                $h = Pedir-Hora
+                if ($h) {
+                    try {
+                        Crear-Tarea -frecuencia 'Daily' -hora $h
+                        Write-Host ("Copia DIARIA programada a las {0}." -f $h.ToString('HH:mm')) -ForegroundColor Green
+                    } catch {
+                        Write-Host ("ERROR al programar: {0}" -f $_.Exception.Message) -ForegroundColor Red
+                    }
+                    Pausar
+                }
+            }
+            1 {
+                $dia = Pedir-Dia
+                if ($dia) {
+                    $h = Pedir-Hora
+                    if ($h) {
+                        try {
+                            Crear-Tarea -frecuencia 'Weekly' -hora $h -dia $dia
+                            Write-Host ("Copia SEMANAL programada ({0} a las {1})." -f $dia, $h.ToString('HH:mm')) -ForegroundColor Green
+                        } catch {
+                            Write-Host ("ERROR al programar: {0}" -f $_.Exception.Message) -ForegroundColor Red
+                        }
+                        Pausar
+                    }
+                }
+            }
+            2 {
+                if ($tarea) {
+                    try {
+                        Unregister-ScheduledTask -TaskName $Script:TareaNombre -Confirm:$false
+                        Write-Host "Copia automatica eliminada." -ForegroundColor Green
+                    } catch {
+                        Write-Host ("ERROR al quitar: {0}" -f $_.Exception.Message) -ForegroundColor Red
+                    }
+                } else {
+                    Write-Host "No habia ninguna copia automatica programada." -ForegroundColor Yellow
+                }
+                Pausar
+            }
+            default { return }   # Volver / ESC
+        }
+    } while ($true)
+}
+
 # =====================  PROGRAMA PRINCIPAL  =====================
 $cfg = Cargar-Config
+
+# --- Modo silencioso (-Run): ejecuta la copia y sale (lo usa la tarea programada) ---
+if ($Run) {
+    Write-Host ("[{0}] CopyKeeper -Run: iniciando copia automatica..." -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))
+    $ok = Invoke-Copia $cfg
+    if ($ok) { exit 0 } else { exit 1 }
+}
 
 $opcionesMenu = @(
     "Elegir QUE SE COPIA del origen  (ver y marcar)",
@@ -504,6 +683,7 @@ $opcionesMenu = @(
     "Archivos a ignorar  (agregar / quitar a mano)",
     "Carpetas/archivos EXTRA a incluir  (agregar / quitar)",
     "Activar / desactivar registro (log)",
+    "Programar copia automatica  (Windows)",
     ">> EJECUTAR COPIA AHORA <<",
     "Salir"
 )
@@ -513,7 +693,7 @@ do {
     $seleccion = Show-Menu -Titulo (Get-TituloPrincipal $cfg) -Info (Get-InfoEstado $cfg) `
         -Opciones $opcionesMenu -Inicial $seleccion `
         -Ayuda "(flechas para moverte - ENTER elige - ESC sale)" `
-        -ColorOpcion @{ 8 = 'Green' }
+        -ColorOpcion @{ 9 = 'Green' }
 
     switch ($seleccion) {
         0 {
@@ -552,8 +732,9 @@ do {
             $cfg.crearRegistro = -not $cfg.crearRegistro
             Guardar-Config $cfg
         }
-        8 { Ejecutar-Copia $cfg }
-        9 { break }            # Salir
+        8 { Programar-Copia }
+        9 { Ejecutar-Copia $cfg }
+        10 { break }           # Salir
         -1 { break }           # ESC = salir
     }
 } while ($true)

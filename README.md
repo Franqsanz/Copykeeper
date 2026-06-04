@@ -14,6 +14,7 @@ CopyKeeper mirrors a source folder into a destination (e.g. a local drive or you
 - **Visual picker**: see the real contents of your source folder split into two live lists — **what gets copied** and **what gets ignored** — and toggle items with `Enter`.
 - **Incremental copy**: files with the same size and modification date are skipped, so re-runs are fast.
 - **Extras**: include folders or files located *outside* the main source folder.
+- **Scheduled backups**: run automatically via Windows Task Scheduler (daily or weekly) — set it up from the menu, no admin needed.
 - **Activity log** with a summary (copied / ignored / errors / total time).
 - **Config lives outside the code** in a JSON file, so your settings survive updates and reinstalls.
 - **Installer** that adds a `copykeeper` command to your PATH — run it from any terminal.
@@ -74,6 +75,7 @@ When you launch CopyKeeper you get the main menu:
     Archivos a ignorar  (agregar / quitar a mano)
     Carpetas/archivos EXTRA a incluir  (agregar / quitar)
     Activar / desactivar registro (log)
+    Programar copia automatica  (Windows)
   > >> EJECUTAR COPIA AHORA <<
     Salir
   (flechas para moverte - ENTER elige - ESC sale)
@@ -110,6 +112,15 @@ Use **"Carpetas/archivos EXTRA a incluir"** to add full paths to folders or file
 ### Running a backup
 
 Choose **`>> EJECUTAR COPIA AHORA <<`** (highlighted in green). After a confirmation, CopyKeeper copies the source (minus ignored items) and then any extras, printing a summary at the end.
+
+### Scheduled (automatic) backups
+
+Open **"Programar copia automatica"** to let CopyKeeper run on its own through the Windows Task Scheduler:
+
+- Choose **daily** or **weekly** and the time (and day, for weekly).
+- The task runs CopyKeeper in **silent mode** (`backup.ps1 -Run`) — it copies using your saved config without opening the menu, and records the result in the log file.
+- You can view the current schedule or remove it from the same screen.
+- No administrator privileges required (the task runs as your user).
 
 ---
 

@@ -14,6 +14,7 @@ CopyKeeper hace un "espejo" de una carpeta de origen hacia un destino (por ejemp
 - **Selector visual**: ves el contenido real de tu carpeta de origen separado en dos listas vivas — **lo que se copia** y **lo que se ignora** — y movés ítems entre ellas con `Enter`.
 - **Copia incremental**: los archivos con el mismo tamaño y fecha de modificación se saltean, así las copias siguientes son rápidas.
 - **Extras**: incluí carpetas o archivos que estén *fuera* de la carpeta de origen.
+- **Copia automática**: corre sola con el Programador de tareas de Windows (diaria o semanal) — la configurás desde el menú, sin permisos de administrador.
 - **Registro (log)** con un resumen (copiados / ignorados / errores / tiempo total).
 - **La config vive fuera del código** en un archivo JSON, así tus ajustes sobreviven actualizaciones y reinstalaciones.
 - **Instalador** que agrega el comando `copykeeper` al PATH — lo abrís desde cualquier terminal.
@@ -74,6 +75,7 @@ Al abrir CopyKeeper ves el menú principal:
     Archivos a ignorar  (agregar / quitar a mano)
     Carpetas/archivos EXTRA a incluir  (agregar / quitar)
     Activar / desactivar registro (log)
+    Programar copia automatica  (Windows)
   > >> EJECUTAR COPIA AHORA <<
     Salir
   (flechas para moverte - ENTER elige - ESC sale)
@@ -110,6 +112,15 @@ Usá **"Carpetas/archivos EXTRA a incluir"** para agregar rutas completas de car
 ### Ejecutar una copia
 
 Elegí **`>> EJECUTAR COPIA AHORA <<`** (resaltado en verde). Tras una confirmación, CopyKeeper copia el origen (menos lo ignorado) y luego los extras, mostrando un resumen al final.
+
+### Copia automática (programada)
+
+Abrí **"Programar copia automatica"** para que CopyKeeper se ejecute solo con el Programador de tareas de Windows:
+
+- Elegís **diaria** o **semanal** y el horario (y el día, si es semanal).
+- La tarea corre CopyKeeper en **modo silencioso** (`backup.ps1 -Run`) — copia usando tu config guardada sin abrir el menú, y deja el resultado en el archivo de log.
+- Desde la misma pantalla podés ver la programación actual o quitarla.
+- No requiere permisos de administrador (la tarea corre como tu usuario).
 
 ---
 
