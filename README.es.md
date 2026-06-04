@@ -154,27 +154,9 @@ Doble clic en **`uninstall.bat`**. Va a:
 2. Borrar la carpeta del programa.
 3. Preguntarte si también querés borrar tu configuración (`%APPDATA%\CopyKeeper`).
 
----
-
-## Estructura del proyecto
-
-```
-CopyKeeper/
-├── backup.ps1                   # CLI interactivo
-├── backup.bat                   # Abre el menú sin instalar
-├── copyFolders.ps1              # Motor de copia (incremental)
-├── install.bat / install.ps1    # Instalador (agrega el comando 'copykeeper')
-├── uninstall.bat / uninstall.ps1
-├── backup-config.example.json   # Config de ejemplo (la tuya queda local y git-ignored)
-└── README.md
-```
-
----
-
 ## Notas
 
-- El menú usa `[Console]::ReadKey()` para la navegación con flechas, así que abrilo siempre desde una consola real (`backup.bat`, `install.bat` o el comando `copykeeper`).
-- Tu `backup-config.json` personal y los logs están excluidos por `.gitignore` y nunca se suben.
+> El menú usa `[Console]::ReadKey()` para la navegación con flechas, así que abrilo siempre desde una consola real (`backup.bat`, `install.bat` o el comando `copykeeper`).
 
 ---
 
