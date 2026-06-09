@@ -305,7 +305,10 @@ function Elegir-Contenido {
 
     $sel = 0
     $cambios = $false
+    $top = 0
+    $fmt = { param($it) ("{0}  {1}" -f $(if ($it.PSIsContainer) {"[CARPETA]"} else {"[ archivo]"}), $it.Name) }
     try { [Console]::CursorVisible = $false } catch {}
+    try { Clear-Host } catch {}   # limpieza inicial unica
     try {
         while ($true) {
             # Separar en dos grupos; el orden visual es: primero los que se copian, luego los ignorados
@@ -315,37 +318,64 @@ function Elegir-Contenido {
             if ($sel -ge $orden.Count) { $sel = $orden.Count - 1 }
             if ($sel -lt 0) { $sel = 0 }
 
-            Clear-Host
-            Write-Host "============================================================" -ForegroundColor Cyan
-            Write-Host (Centrar "QUE SE COPIA DEL ORIGEN" 60) -ForegroundColor Cyan
-            Write-Host "============================================================" -ForegroundColor Cyan
-            Write-Host (" Origen: {0}" -f $cfg.origen)
-            Write-Host "------------------------------------------------------------" -ForegroundColor DarkGray
+            # Construir las "filas" a mostrar (cabeceras + items). Cada item recuerda su indice en $orden.
+            $filas = @()
+            $filas += @{ tipo='h'; texto=(" SE COPIAN  ({0}):" -f $copiados.Count); fore='Green' }
+            if ($copiados.Count -eq 0) { $filas += @{ tipo='t'; texto='    (ninguno)'; fore='DarkGray' } }
+            $oi = 0
+            foreach ($it in $copiados) { $filas += @{ tipo='i'; idx=$oi; texto=('    ' + (& $fmt $it)); fore='Green' }; $oi++ }
+            $filas += @{ tipo='t'; texto=''; fore=$null }
+            $filas += @{ tipo='h'; texto=(" SE IGNORAN  ({0}):" -f $ignorados.Count); fore='Yellow' }
+            if ($ignorados.Count -eq 0) { $filas += @{ tipo='t'; texto='    (ninguno)'; fore='DarkGray' } }
+            foreach ($it in $ignorados) { $filas += @{ tipo='i'; idx=$oi; texto=('    ' + (& $fmt $it)); fore='DarkGray' }; $oi++ }
 
-            $idx = 0
-            $fmt = { param($it) ("{0}  {1}" -f $(if ($it.PSIsContainer) {"[CARPETA]"} else {"[ archivo]"}), $it.Name) }
-
-            Write-Host (" SE COPIAN  ({0}):" -f $copiados.Count) -ForegroundColor Green
-            if ($copiados.Count -eq 0) { Write-Host "    (ninguno)" -ForegroundColor DarkGray }
-            foreach ($it in $copiados) {
-                $linea = (& $fmt $it)
-                if ($idx -eq $sel) { Write-Host ("  > " + $linea + " ") -ForegroundColor Black -BackgroundColor Cyan }
-                else               { Write-Host ("    " + $linea) -ForegroundColor Green }
-                $idx++
+            # Fila donde esta el elemento seleccionado
+            $filaSel = -1
+            for ($f = 0; $f -lt $filas.Count; $f++) {
+                if ($filas[$f].tipo -eq 'i' -and $filas[$f].idx -eq $sel) { $filaSel = $f; break }
             }
 
-            Write-Host ""
-            Write-Host (" SE IGNORAN  ({0}):" -f $ignorados.Count) -ForegroundColor Yellow
-            if ($ignorados.Count -eq 0) { Write-Host "    (ninguno)" -ForegroundColor DarkGray }
-            foreach ($it in $ignorados) {
-                $linea = (& $fmt $it)
-                if ($idx -eq $sel) { Write-Host ("  > " + $linea + " ") -ForegroundColor Black -BackgroundColor Cyan }
-                else               { Write-Host ("    " + $linea) -ForegroundColor DarkGray }
-                $idx++
+            # Alto disponible y ajuste del scroll (viewport) para no pasarnos de pantalla
+            $hh = 25; try { $hh = [Console]::WindowHeight } catch {}
+            $cabecera = 5    # banner(3) + origen(1) + separador(1)
+            $pie = 2         # linea en blanco + ayuda
+            $visibles = $hh - $cabecera - $pie - 1
+            if ($visibles -lt 3) { $visibles = 3 }
+            if ($filaSel -ge 0) {
+                if ($filaSel -lt $top) { $top = $filaSel }
+                elseif ($filaSel -ge $top + $visibles) { $top = $filaSel - $visibles + 1 }
+            }
+            $maxTop = [Math]::Max(0, $filas.Count - $visibles)
+            if ($top -gt $maxTop) { $top = $maxTop }
+            if ($top -lt 0) { $top = 0 }
+            $hayArriba = ($top -gt 0)
+            $hayAbajo  = ($top + $visibles -lt $filas.Count)
+
+            # Dibujar (reposicionando el cursor, sin Clear-Host -> sin parpadeo)
+            try { [Console]::SetCursorPosition(0, 0) } catch {}
+            Write-Linea "============================================================" Cyan $null
+            Write-Linea (Centrar "QUE SE COPIA DEL ORIGEN" 60) Cyan $null
+            Write-Linea "============================================================" Cyan $null
+            Write-Linea (" Origen: {0}" -f $cfg.origen) $null $null
+            $sep = if ($hayArriba) { "----------------------------  ( mas arriba ^ )  ------------" }
+                   else            { "------------------------------------------------------------" }
+            Write-Linea $sep DarkGray $null
+
+            for ($r = 0; $r -lt $visibles; $r++) {
+                $fi = $top + $r
+                if ($fi -ge $filas.Count) { Write-Linea "" $null $null; continue }
+                $fila = $filas[$fi]
+                if ($fila.tipo -eq 'i' -and $fila.idx -eq $sel) {
+                    Write-Linea ("  > " + $fila.texto.Substring(4) + " ") Black Cyan
+                } else {
+                    Write-Linea $fila.texto $fila.fore $null
+                }
             }
 
-            Write-Host ""
-            Write-Host "  (flechas para moverte - ENTER pasa de una lista a la otra - ESC vuelve)" -ForegroundColor DarkGray
+            Write-Linea "" $null $null
+            $ayuda = if ($hayAbajo) { "  (flechas - ENTER cambia de lista - ESC vuelve)   ( mas abajo v )" }
+                     else           { "  (flechas - ENTER cambia de lista - ESC vuelve)" }
+            Write-Linea $ayuda DarkGray $null
 
             $tecla = [Console]::ReadKey($true)
             switch ($tecla.Key) {
