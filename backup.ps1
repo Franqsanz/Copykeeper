@@ -103,6 +103,25 @@ function Centrar {
     return (' ' * $pad) + $texto
 }
 
+# Escribe una linea y rellena hasta el ancho de la consola con espacios
+# (con color por defecto) para borrar lo que hubiera escrito antes -> sin parpadeo.
+function Write-Linea {
+    param([string]$texto, $fore, $back)
+    $ancho = 80
+    try { $ancho = [Console]::WindowWidth - 1 } catch {}
+    if ($ancho -lt 1) { $ancho = 80 }
+    if ($texto.Length -gt $ancho) { $texto = $texto.Substring(0, $ancho) }
+
+    $p = @{ Object = $texto; NoNewline = $true }
+    if ($fore) { $p.ForegroundColor = $fore }
+    if ($back) { $p.BackgroundColor = $back }
+    Write-Host @p
+
+    $resto = $ancho - $texto.Length
+    if ($resto -gt 0) { Write-Host (' ' * $resto) -NoNewline }
+    Write-Host ""   # salto de linea con colores por defecto
+}
+
 function Show-Menu {
     param(
         [string]$Titulo,
@@ -115,28 +134,31 @@ function Show-Menu {
 
     $sel = $Inicial
     try { [Console]::CursorVisible = $false } catch {}
+    try { Clear-Host } catch {}   # limpieza inicial unica (luego se reescribe encima, sin parpadeo)
     try {
         while ($true) {
-            Clear-Host
-            Write-Host "============================================================" -ForegroundColor Cyan
-            Write-Host (Centrar $Titulo 60) -ForegroundColor Cyan
-            Write-Host "============================================================" -ForegroundColor Cyan
-            foreach ($l in $Info) { Write-Host $l }
+            # Reposicionar el cursor arriba en vez de borrar toda la pantalla -> evita el titileo
+            try { [Console]::SetCursorPosition(0, 0) } catch {}
+
+            Write-Linea "============================================================" Cyan $null
+            Write-Linea (Centrar $Titulo 60) Cyan $null
+            Write-Linea "============================================================" Cyan $null
+            foreach ($l in $Info) { Write-Linea $l $null $null }
             if ($Info.Count -gt 0) {
-                Write-Host "------------------------------------------------------------" -ForegroundColor DarkGray
+                Write-Linea "------------------------------------------------------------" DarkGray $null
             }
 
             for ($i = 0; $i -lt $Opciones.Count; $i++) {
                 if ($i -eq $sel) {
-                    Write-Host ("  > " + $Opciones[$i] + " ") -ForegroundColor Black -BackgroundColor Cyan
+                    Write-Linea ("  > " + $Opciones[$i] + " ") Black Cyan
                 } elseif ($ColorOpcion.ContainsKey($i)) {
-                    Write-Host ("    " + $Opciones[$i]) -ForegroundColor $ColorOpcion[$i]
+                    Write-Linea ("    " + $Opciones[$i]) $ColorOpcion[$i] $null
                 } else {
-                    Write-Host ("    " + $Opciones[$i])
+                    Write-Linea ("    " + $Opciones[$i]) $null $null
                 }
             }
-            Write-Host ""
-            Write-Host "  $Ayuda" -ForegroundColor DarkGray
+            Write-Linea "" $null $null
+            Write-Linea "  $Ayuda" DarkGray $null
 
             $tecla = [Console]::ReadKey($true)
             switch ($tecla.Key) {
@@ -689,6 +711,7 @@ $opcionesMenu = @(
 )
 
 $seleccion = 0
+$salir = $false
 do {
     $seleccion = Show-Menu -Titulo (Get-TituloPrincipal $cfg) -Info (Get-InfoEstado $cfg) `
         -Opciones $opcionesMenu -Inicial $seleccion `
@@ -734,10 +757,10 @@ do {
         }
         8 { Programar-Copia }
         9 { Ejecutar-Copia $cfg }
-        10 { break }           # Salir
-        -1 { break }           # ESC = salir
+        10 { $salir = $true }   # Salir
+        -1 { $salir = $true }   # ESC = salir
     }
-} while ($true)
+} while (-not $salir)
 
 Clear-Host
 Write-Host "Hasta luego!" -ForegroundColor Cyan
